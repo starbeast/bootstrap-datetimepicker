@@ -26,6 +26,11 @@
  * Make it work in bootstrap v3
  */
 
+ // JSON format for month: {month: mm, days: [ {day: 1, enabledTime: [1,3,6]}, {day: 2, enabledTime: [1, 2, 4]} ], turn: "odd" };
+					/*Do not touch list : UTCDate - return utc date from args
+					UTCToday - today in UTC format
+					RTL - right to left*/		
+
 !function ($) {
 
 	function UTCDate() {
@@ -36,6 +41,26 @@
 		var today = new Date();
 		return UTCDate(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), today.getUTCHours(), today.getUTCMinutes(), today.getUTCSeconds(), 0);
 	}
+
+	var registerFilterMonad = (function() {
+		var oldMonad = Object.prototype.filterMonad;
+
+		return function() {
+
+			if(arguments && arguments[0]) {
+				Object.prototype.filterMonad = function(param, filter, returnValue) {
+					if (!$.isArray(this)) return [];
+					var result = $.grep(this, function (elem, ind) {
+						return elem[param] == filter;
+					})[0];
+					return result ? ($.isArray(result[returnValue]) ? result[returnValue] : [result[returnValue]]) : [];
+				};
+			} else {
+				Object.prototype.filterMonad = oldMonad;
+			}
+		};
+
+	})();
 
 	// Picker object
 
@@ -67,6 +92,31 @@
 		this.pickerPosition = options.pickerPosition || this.element.data('picker-position') || 'bottom-right';
 		this.showMeridian = options.showMeridian || this.element.data('show-meridian') || false;
 		this.initialDate = options.initialDate || new Date();
+
+		//---------------------------------------------------------------
+
+		//array for all monthes we have cached
+
+		this.years = options.yearsShedule || [];
+		this.holidaysAreDisabled = options.holidaysAreDisabled || false;
+		this.emptyMeansEnabled = options.emptyMeansEnabled || false;
+		
+		/*this.currentYear = years.length == 0 ? undefined : years[0].year;
+		this.currentMonth = undefined;
+		this.previousMonth = undefined;
+		this.nextMonth = {};
+		this.currentDay = {};
+
+		
+
+		//depending on minuteStep
+		this.currentDayEnabledIntervals = [];*/
+
+		this.workingRange = options.workingRange || this.element.data('working-range') || "none";
+		this.serverPath = options.serverPath || this.element.data('server-path') || "";
+		this.disableWeekends = options.disableWeekends || false;
+
+		//---------------------------------------------------------------
 
 		this._attachEvents();
 
@@ -168,7 +218,6 @@
 				this.picker.find('.prev i, .next i')
 					.toggleClass('icon-arrow-left icon-arrow-right');
 			}
-			;
 
 		}
 		$(document).on('mousedown', function (e) {
@@ -384,6 +433,7 @@
 
 		getFormattedDate: function (format) {
 			if (format == undefined) format = this.format;
+
 			return DPGlobal.formatDate(this.date, format, this.language, this.formatType);
 		},
 
@@ -502,6 +552,74 @@
 			this.picker.find('.datetimepicker-months td').html(html);
 		},
 
+		isDisabled: function(date, depth) {
+			var dateYear = date.getUTCFullYear();
+			var dateMonth = date.getUTCMonth();
+			var dateDay = date.getUTCDate();
+			var dateHour = date.getUTCHours();
+			var dateMinute = date.getUTCMinutes();
+			var isDisabled;
+
+			switch(depth) {
+
+				case 0: isDisabled = this.years.filterMonad("year", dateYear, "year").length ? false : true;
+
+						if(isDisabled) return this.emptyMeansEnabled ? false : true;
+						return this.emptyMeansEnabled ? true : false;
+
+				case 1: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
+							.filterMonad("month", dateMonth, "month").length ? false : true;
+
+						if(isDisabled) return this.emptyMeansEnabled ? false : true;
+						return this.emptyMeansEnabled ? true : false;
+
+				case 2: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
+							.filterMonad("month", dateMonth, "days")
+							.filterMonad("day", dateDay, "day").length ? false : true;
+
+						if(isDisabled || (this.holidaysAreDisabled && isHoliday(date))) return this.emptyMeansEnabled ? false : true;
+						return this.emptyMeansEnabled ? true : false;
+						
+				case 3: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
+							.filterMonad("month", dateMonth, "days")
+							.filterMonad("day", dateDay, "hours")
+							.filterMonad("hour", dateHour, "hour").length ? false : true;
+
+						if(isDisabled) return this.emptyMeansEnabled ? false : true;
+						return this.emptyMeansEnabled ? true : false;
+
+				case 4: var enabledIntervals = this.years.filterMonad("year", dateYear, "monthes")
+							.filterMonad("month", dateMonth, "days")
+							.filterMonad("day", dateDay, "hours")
+							.filterMonad("hour", dateHour, "intervals");
+
+						var diaps = $.map(enabledIntervals, function(element) {
+							return element * this.minuteStep;
+						});
+
+						isDisabled = $.inArray(dateMinute, diaps) === -1;
+
+						if(isDisabled) return this.emptyMeansEnabled ? false : true;
+						return this.emptyMeansEnabled ? true : false;
+			}
+		},
+
+		isHolidayDay: function(date) {
+			var dateYear = date.getUTCFullYear();
+			var dateMonth = date.getUTCMonth();
+			var dateDay = date.getUTCDate();
+			var dateDayInWeek = date.getUTCDay();
+
+			var isHoliday = $.filter(dates[this.language].holidays, function(elem) {
+				return elem.month == dateMonth && elem.day == dateDay;
+			}).length != 0;
+
+			if(isHoliday || (this.disableWeekends && (dateDayInWeek == 0 || dateDayInWeek == 6))) {
+				return true;
+			}
+			return false;
+		},
+
 		fill: function () {
 			if (this.date == null || this.viewDate == null) {
 				return;
@@ -551,6 +669,9 @@
 			nextMonth = nextMonth.valueOf();
 			var html = [];
 			var clsName;
+
+			registerFilterMonad(true);
+			//fill it somewhere here!
 			while (prevMonth.valueOf() < nextMonth) {
 				if (prevMonth.getUTCDay() == this.weekStart) {
 					html.push('<tr>');
@@ -572,8 +693,11 @@
 					clsName += ' active';
 				}
 				if ((prevMonth.valueOf() + 86400000) <= this.startDate || prevMonth.valueOf() > this.endDate ||
-					$.inArray(prevMonth.getUTCDay(), this.daysOfWeekDisabled) !== -1) {
+					$.inArray(prevMonth.getUTCDay(), this.daysOfWeekDisabled) !== -1 || this.isDisabled(prevMonth, 2)) {
 					clsName += ' disabled';
+				}
+				if(this.isHolidayDay(prevMonth)) {
+					clsName += ' holiday';
 				}
 				html.push('<td class="day' + clsName + '">' + prevMonth.getUTCDate() + '</td>');
 				if (prevMonth.getUTCDay() == this.weekEnd) {
@@ -589,7 +713,7 @@
 				var actual = UTCDate(year, month, dayMonth, i);
 				clsName = '';
 				// We want the previous hour for the startDate
-				if ((actual.valueOf() + 3600000) <= this.startDate || actual.valueOf() > this.endDate) {
+				if ((actual.valueOf() + 3600000) <= this.startDate || actual.valueOf() > this.endDate || this.isDisabled(actual, 3)) {
 					clsName += ' disabled';
 				} else if (hours == i) {
 					clsName += ' active';
@@ -620,7 +744,7 @@
 			for (var i = 0; i < 60; i += this.minuteStep) {
 				var actual = UTCDate(year, month, dayMonth, hours, i, 0);
 				clsName = '';
-				if (actual.valueOf() < this.startDate || actual.valueOf() > this.endDate) {
+				if (actual.valueOf() < this.startDate || actual.valueOf() > this.endDate || isDisabled(actual, 4)) {
 					clsName += ' disabled';
 				} else if (Math.floor(minutes / this.minuteStep) == Math.floor(i / this.minuteStep)) {
 					clsName += ' active';
@@ -666,6 +790,9 @@
 			if (year == endYear) {
 				months.slice(endMonth + 1).addClass('disabled');
 			}
+			for(var k = 0; k < 12; k++) {
+				if(isDisabled(new UTCDate(year, k), 1)) months[i].addClass('disabled');
+			}
 
 			html = '';
 			year = parseInt(year / 10, 10) * 10;
@@ -676,9 +803,12 @@
 				.find('td');
 			year -= 1;
 			for (var i = -1; i < 11; i++) {
-				html += '<span class="year' + (i == -1 || i == 10 ? ' old' : '') + (currentYear == year ? ' active' : '') + (year < startYear || year > endYear ? ' disabled' : '') + '">' + year + '</span>';
+				html += '<span class="year' + (i == -1 || i == 10 ? ' old' : '') + (currentYear == year ? ' active' : '') + (year < startYear || year > endYear || isDisabled (new UTCDate(year), 0) ? ' disabled' : '') + '">' + year + '</span>';
 				year += 1;
 			}
+
+			registerFilterMonad(false);
+
 			yearCont.html(html);
 			this.place();
 		},
