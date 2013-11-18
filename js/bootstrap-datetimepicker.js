@@ -655,12 +655,41 @@
 
 			var isHoliday = false;
 
-			/*var isHoliday = $.filter(dates[this.language].holidays, function(elem) {
+			var isHoliday = $.grep(dates[this.language].holidays, function(elem) {
 				return elem.month === dateMonth && ($.inArray(dateDay, elem.days) !== -1);
-			}).length;*/
+			}).length;
 
 			if(isHoliday || (this.disableWeekends && (dateDayInWeek === 0 || dateDayInWeek === 6))) {
 				return true;
+			}
+			return false;
+		},
+
+		todayClosestDate: function(date) {
+			var dateYear = date.getUTCFullYear();
+			var dateMonth = date.getUTCMonth();
+			var dateDay = date.getUTCDate();
+			var dateHour = date.getUTCHours();
+			var dateMinute = date.getUTCMinutes();
+			var prev = 0, next = 1, temp;			
+			var hour = 0, minute = 0;
+			for(; next < 60 / this.minuteStep; prev++, next++) {
+				if(dateMinute > prev * this.minuteStep && dateMinute <= next * this.minuteStep) {
+					temp = next;
+					break;
+				}
+			}
+
+			temp = temp ? temp : 0;
+			for(hour = dateHour; hour < 24; hour++) {
+				if(!this.isDisabled(new UTCDate(dateYear, dateMonth, dateDay, hour), 3) && !this.isReserved(new UTCDate(dateYear, dateMonth, dateDay, hour), 3)) {
+					minte = hour > dateHour ? 0 : temp;
+					for(; minute * this.minuteStep < 60; minute++) {
+						if(!this.isDisabled(new UTCDate(dateYear, dateMonth, dateDay, hour, minute * this.minuteStep), 4) && !this.isReserved(new UTCDate(dateYear, dateMonth, dateDay, hour, minute * this.minuteStep), 4)) {
+							return new UTCDate(dateYear, dateMonth, dateDay, hour, minute * this.minuteStep);
+						}
+					}
+				}
 			}
 			return false;
 		},
@@ -866,6 +895,8 @@
 				year += 1;
 			}
 
+			if(this.isDisabled(new Date(), 2)) $('tfoot .today').addClass('disabled');
+
 			registerFilterMonad(false);
 
 			yearCont.html(html);
@@ -1017,11 +1048,14 @@
 							case 'today':
 								var date = new Date();
 								date = UTCDate(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), 0);
-
+								registerFilterMonad(true);
+								if(this.isDisabled(date, 2) || this.isReserved(date, 2)) break;
 								// Respect startDate and endDate.
 								if (date < this.startDate) date = this.startDate;
 								else if (date > this.endDate) date = this.endDate;
-
+								date = this.todayClosestDate(date);
+								registerFilterMonad(false);
+								if(!date) break;
 								this.viewMode = this.startViewMode;
 								this.showMode(0);
 								this._setDate(date);
