@@ -39,8 +39,8 @@
 	function UTCToday() {
 		var today = new Date();
 		return UTCDate(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), today.getUTCHours(), today.getUTCMinutes(), today.getUTCSeconds(), 0);
-	}	
-
+	}
+//magic code goes here
 	var registerFilterMonad = (function (){
 
 		var oldMonad = Object.prototype.filterMonad;
@@ -72,6 +72,45 @@
 		};
 	})();
 
+	var registerArrayPushing = (function () {
+
+		var oldPushing = Object.prototype.arrayPushing;
+		var pushing = oldPushing;
+		Object.defineProperty(Object.prototype, "arrayPushing", {
+					enumerable: false,
+					configurable : true,
+					get: function() {
+						return monad;
+					},
+					set: function(value) {
+						monad = value;
+					}
+				});
+
+		return function() {
+
+			if(arguments && arguments[0]) {
+				Object.prototype.arrayPushing = function(param, filter, pushValue, returnValue) {
+					if (!$.isArray(this)) return [];
+					var ind;
+					if($.grep(this, function (elem, index) {
+						if (elem[param] == item) {
+							ind = index;
+							return true;
+						}
+					}).length) {
+						return this[ind][returnValue];
+					} else {
+						this.push(pushValue);
+						pushValue[returnValue];
+					}
+				};
+			} else {
+				Object.prototype.arrayPushing = oldPushing;
+			}
+		};
+	})();
+//end of magic
 	var Datetimepicker = function (element, options) {
 		var that = this;
 
@@ -104,14 +143,12 @@
 		//---------------------------------------------------------------
 
 		//array for all years we have cached
-
-		this.years = options.yearsSchedule || [];
+		this.intervalsAreIndexes = options.intervalsAreIndexes || true;
+		this.years = this.rebuildDatesAccordingToTimezoneOffset(options.yearsSchedule) || [];
 		this.holidaysAreDisabled = options.holidaysAreDisabled || false;
 
 		//inversion of dates being enabled
-		this.emptyMeansEnabled = options.emptyMeansEnabled || false;
-		this.intervalsAreIndexes = options.intervalsAreIndexes || true;
-		
+		this.emptyMeansEnabled = options.emptyMeansEnabled || false;		
 		this.serverPath = options.serverPath || this.element.data('server-path') || "";
 		this.disableWeekends = options.disableWeekends || false;
 
@@ -553,6 +590,7 @@
 
 		isDisabled: function(date, depth) {
 			//return false;
+			//date = new Date(date.valueOf() - date.getTimezoneOffset() * 60 * 1000);
 			var dateYear = date.getUTCFullYear();
 			var dateMonth = date.getUTCMonth();
 			var dateDay = date.getUTCDate();
@@ -562,11 +600,7 @@
 
 			switch(depth) {
 
-			case 0: 
-					if(dateYear == 2013) {
-						isDisabled = false;
-					};
-					isDisabled = this.years.filterMonad("year", dateYear, "year").length ? false : true;
+			case 0: isDisabled = this.years.filterMonad("year", dateYear, "year").length ? false : true;
 					if(isDisabled) return this.emptyMeansEnabled ? false : true;
 					return this.emptyMeansEnabled ? true : false;
 
@@ -603,6 +637,7 @@
 
 		isReserved: function(date, depth) {
 			//return false;
+			//date = new Date(date.valueOf() - date.getTimezoneOffset() * 60 * 1000);
 			var dateYear = date.getUTCFullYear();
 			var dateMonth = date.getUTCMonth();
 			var dateDay = date.getUTCDate();
@@ -648,6 +683,7 @@
 
 		isHolidayDay: function(date) {
 			//return false;
+			//date = new Date(date.valueOf() - date.getTimezoneOffset() * 60 * 1000);
 			var dateYear = date.getUTCFullYear();
 			var dateMonth = date.getUTCMonth();
 			var dateDay = date.getUTCDate();
@@ -655,23 +691,28 @@
 
 			var isHoliday = false;
 
-			var isHoliday = $.grep(dates[this.language].holidays, function(elem) {
+			isHoliday = $.grep(dates[this.language].holidays, function(elem) {
 				return elem.month === dateMonth && ($.inArray(dateDay, elem.days) !== -1);
 			}).length;
+			var timezoneOffset = new Date().getTimezoneOffset();
 
-			if(isHoliday || (this.disableWeekends && (dateDayInWeek === 0 || dateDayInWeek === 6))) {
+			/*firstDayDisabled = (timezoneOffset / 60 <= 12) ? 5 : (timezoneOffset / 60 >= 12) ? 0 : 6;
+			secondDayDisabled = (timezoneOffset / 60 <= 12) ? 6 : (timezoneOffset / 60 >= 12) ? 1 : 0;*/
+
+			if(isHoliday /*|| (this.disableWeekends && (dateDayInWeek === firstDayDisabled || dateDayInWeek === secondDayDisabled))*/) {
 				return true;
 			}
 			return false;
 		},
 
 		todayClosestDate: function(date) {
+			//date = new Date(date.valueOf() - date.getTimezoneOffset() * 60 * 1000);
 			var dateYear = date.getUTCFullYear();
 			var dateMonth = date.getUTCMonth();
 			var dateDay = date.getUTCDate();
 			var dateHour = date.getUTCHours();
 			var dateMinute = date.getUTCMinutes();
-			var prev = 0, next = 1, temp;			
+			var prev = 0, next = 1, temp;
 			var hour = 0, minute = 0;
 			for(; next < 60 / this.minuteStep; prev++, next++) {
 				if(dateMinute > prev * this.minuteStep && dateMinute <= next * this.minuteStep) {
@@ -692,6 +733,64 @@
 				}
 			}
 			return false;
+		},
+
+		rebuildDatesAccordingToTimezoneOffset: function(years) {
+			var dates = [];
+			var i,j,k,e,d;
+			var monthes, days, hours, intervals;
+			var year, month, day, hour, interval;
+			var date, isReserved;
+			for(i = 0; i < years.length; i++) {
+				year = years[i].year;
+				monthes = years[i].monthes;
+				for(j = 0; j < monthes.length; j++) {
+					month = monthes[j].month;
+					days = monthes[j].days;
+					for(k = 0; k < days.length; k++) {
+						day = days[k].day;
+						hours = days[k].hours;
+						for(e = 0; e < hours.length; e++) {
+							hour = hours[e].hour;
+							intervals = hours[e].intervals;
+							for(d = 0; d < intervals.length; d++) {
+								interval = this.intervalsAreIndexes ? intervals[d].interval * this.minuteStep : intervals[d].interval;
+								interval -= new Date().getTimezoneOffset();
+								date = new Date(year, month, day, hour, interval, 0, 0);
+								isReserved = intervals[d].reserved;
+								dates.push({date: date, reserved: isReserved});
+							}
+						}
+					}
+				}
+			}
+
+			var yearsToReturn = this.buildNewYearsObjectFromDates(dates);
+			return yearsToReturn;
+		},
+
+		buildNewYearsObjectFromDates: function(dates) {
+			var years = [];
+			var date;
+			var currentDate = {
+				year: undefined,
+				reserved: true,
+				month: undefined,
+				day: undefined,
+				hour: undefined
+			};
+			var i = 0;
+			var year, month, day, hour, interval;
+			for(; i < dates.length; i++) {
+				date = dates[i].date;
+				year = date.getFullYear();
+				month = date.getMonth();
+				day = date.getDate();
+				hour = date.getHours();
+				interval = this.intervalsAreIndexes ? date.getMinutes() / this.minuteStep : date.getMinutes();
+				years[getIndexWithPushing()]
+			}
+			return years;
 		},
 
 		fill: function () {
