@@ -28,10 +28,9 @@
 
  // JSON format for month: {month: mm, days: [ {day: 1, enabledTime: [1,3,6]}, {day: 2, enabledTime: [1, 2, 4]} ], turn: "odd" };
 					/*Do not touch list : UTCDate - return utc date from args
-					UTCToday - today in UTC format
-					RTL - right to left*/		
+					UTCToday - today in UTC format */
 
-!function ($) {
+(function ($) {
 
 	function UTCDate() {
 		return new Date(Date.UTC.apply(Date, arguments));
@@ -40,10 +39,22 @@
 	function UTCToday() {
 		var today = new Date();
 		return UTCDate(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), today.getUTCHours(), today.getUTCMinutes(), today.getUTCSeconds(), 0);
-	}
+	}	
 
-	var registerFilterMonad = (function() {
+	var registerFilterMonad = (function (){
+
 		var oldMonad = Object.prototype.filterMonad;
+		var monad = oldMonad;
+		Object.defineProperty(Object.prototype, "filterMonad", {
+					enumerable: false,
+					configurable : true,
+					get: function() {
+						return monad;
+					},
+					set: function(value) {
+						monad = value;
+					}
+				});
 
 		return function() {
 
@@ -59,10 +70,7 @@
 				Object.prototype.filterMonad = oldMonad;
 			}
 		};
-
 	})();
-
-	// Picker object
 
 	var Datetimepicker = function (element, options) {
 		var that = this;
@@ -95,24 +103,15 @@
 
 		//---------------------------------------------------------------
 
-		//array for all monthes we have cached
+		//array for all years we have cached
 
-		this.years = options.yearsShedule || [];
+		this.years = options.yearsSchedule || [];
 		this.holidaysAreDisabled = options.holidaysAreDisabled || false;
+
+		//inversion of dates being enabled
 		this.emptyMeansEnabled = options.emptyMeansEnabled || false;
+		this.intervalsAreIndexes = options.intervalsAreIndexes || true;
 		
-		/*this.currentYear = years.length == 0 ? undefined : years[0].year;
-		this.currentMonth = undefined;
-		this.previousMonth = undefined;
-		this.nextMonth = {};
-		this.currentDay = {};
-
-		
-
-		//depending on minuteStep
-		this.currentDayEnabledIntervals = [];*/
-
-		this.workingRange = options.workingRange || this.element.data('working-range') || "none";
 		this.serverPath = options.serverPath || this.element.data('server-path') || "";
 		this.disableWeekends = options.disableWeekends || false;
 
@@ -553,6 +552,7 @@
 		},
 
 		isDisabled: function(date, depth) {
+			//return false;
 			var dateYear = date.getUTCFullYear();
 			var dateMonth = date.getUTCMonth();
 			var dateDay = date.getUTCDate();
@@ -562,59 +562,104 @@
 
 			switch(depth) {
 
-				case 0: isDisabled = this.years.filterMonad("year", dateYear, "year").length ? false : true;
+			case 0: 
+					if(dateYear == 2013) {
+						isDisabled = false;
+					};
+					isDisabled = this.years.filterMonad("year", dateYear, "year").length ? false : true;
+					if(isDisabled) return this.emptyMeansEnabled ? false : true;
+					return this.emptyMeansEnabled ? true : false;
 
-						if(isDisabled) return this.emptyMeansEnabled ? false : true;
-						return this.emptyMeansEnabled ? true : false;
+			case 1: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "month").length ? false : true;
+					if(isDisabled) return this.emptyMeansEnabled ? false : true;
+					return this.emptyMeansEnabled ? true : false;
 
-				case 1: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
-							.filterMonad("month", dateMonth, "month").length ? false : true;
+			case 2: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "days")
+						.filterMonad("day", dateDay, "day").length ? false : true;
+					if(this.holidaysAreDisabled && this.isHolidayDay(date)) return true;
+					if(isDisabled || (this.holidaysAreDisabled && this.isHolidayDay(date))) return this.emptyMeansEnabled ? false : true;
+					return this.emptyMeansEnabled ? true : false;
+					
+			case 3: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "days")
+						.filterMonad("day", dateDay, "hours")
+						.filterMonad("hour", dateHour, "hour").length ? false : true;
+					if(isDisabled) return this.emptyMeansEnabled ? false : true;
+					return this.emptyMeansEnabled ? true : false;
 
-						if(isDisabled) return this.emptyMeansEnabled ? false : true;
-						return this.emptyMeansEnabled ? true : false;
+			case 4: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "days")
+						.filterMonad("day", dateDay, "hours")
+						.filterMonad("hour", dateHour, "intervals")
+						.filterMonad("interval", this.intervalsAreIndexes ?
+							dateMinute / this.minuteStep
+							: dateMinute, "interval").length ? false : true;
+					if(isDisabled) return this.emptyMeansEnabled ? false : true;
+					return this.emptyMeansEnabled ? true : false;
+			}
+		},
 
-				case 2: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
-							.filterMonad("month", dateMonth, "days")
-							.filterMonad("day", dateDay, "day").length ? false : true;
+		isReserved: function(date, depth) {
+			//return false;
+			var dateYear = date.getUTCFullYear();
+			var dateMonth = date.getUTCMonth();
+			var dateDay = date.getUTCDate();
+			var dateHour = date.getUTCHours();
+			var dateMinute = date.getUTCMinutes();
+			var isReserved;
 
-						if(isDisabled || (this.holidaysAreDisabled && isHoliday(date))) return this.emptyMeansEnabled ? false : true;
-						return this.emptyMeansEnabled ? true : false;
-						
-				case 3: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
-							.filterMonad("month", dateMonth, "days")
-							.filterMonad("day", dateDay, "hours")
-							.filterMonad("hour", dateHour, "hour").length ? false : true;
+			switch(depth) {
 
-						if(isDisabled) return this.emptyMeansEnabled ? false : true;
-						return this.emptyMeansEnabled ? true : false;
+			case 0: isReserved = this.years.filterMonad("year", dateYear, "reserved")[0];
+				if(isReserved) return true;
+				return false;
 
-				case 4: var enabledIntervals = this.years.filterMonad("year", dateYear, "monthes")
-							.filterMonad("month", dateMonth, "days")
-							.filterMonad("day", dateDay, "hours")
-							.filterMonad("hour", dateHour, "intervals");
+			case 1: isReserved = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "reserved")[0];
+				if(isReserved) return true;
+				return false;
 
-						var diaps = $.map(enabledIntervals, function(element) {
-							return element * this.minuteStep;
-						});
+			case 2: isReserved = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "days")
+						.filterMonad("day", dateDay, "reserved")[0];
+				if(isReserved) return true;
+				return false;
+					
+			case 3: isReserved = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "days")
+						.filterMonad("day", dateDay, "hours")
+						.filterMonad("hour", dateHour, "reserved")[0];
+				if(isReserved) return true;
+				return false;
 
-						isDisabled = $.inArray(dateMinute, diaps) === -1;
-
-						if(isDisabled) return this.emptyMeansEnabled ? false : true;
-						return this.emptyMeansEnabled ? true : false;
+			case 4: isReserved = this.years.filterMonad("year", dateYear, "monthes")
+						.filterMonad("month", dateMonth, "days")
+						.filterMonad("day", dateDay, "hours")
+						.filterMonad("hour", dateHour, "intervals")
+						.filterMonad("interval", this.intervalsAreIndexes ?
+							dateMinute / this.minuteStep
+							: dateMinute, "reserved")[0];
+				if(isReserved) return true;
+				return false;
 			}
 		},
 
 		isHolidayDay: function(date) {
+			//return false;
 			var dateYear = date.getUTCFullYear();
 			var dateMonth = date.getUTCMonth();
 			var dateDay = date.getUTCDate();
 			var dateDayInWeek = date.getUTCDay();
 
-			var isHoliday = $.filter(dates[this.language].holidays, function(elem) {
-				return elem.month == dateMonth && elem.day == dateDay;
-			}).length != 0;
+			var isHoliday = false;
 
-			if(isHoliday || (this.disableWeekends && (dateDayInWeek == 0 || dateDayInWeek == 6))) {
+			/*var isHoliday = $.filter(dates[this.language].holidays, function(elem) {
+				return elem.month === dateMonth && ($.inArray(dateDay, elem.days) !== -1);
+			}).length;*/
+
+			if(isHoliday || (this.disableWeekends && (dateDayInWeek === 0 || dateDayInWeek === 6))) {
 				return true;
 			}
 			return false;
@@ -671,7 +716,7 @@
 			var clsName;
 
 			registerFilterMonad(true);
-			//fill it somewhere here!
+			
 			while (prevMonth.valueOf() < nextMonth) {
 				if (prevMonth.getUTCDay() == this.weekStart) {
 					html.push('<tr>');
@@ -699,6 +744,9 @@
 				if(this.isHolidayDay(prevMonth)) {
 					clsName += ' holiday';
 				}
+				if(this.isReserved(prevMonth, 2)) {
+					clsName += ' reserved';
+				}
 				html.push('<td class="day' + clsName + '">' + prevMonth.getUTCDate() + '</td>');
 				if (prevMonth.getUTCDay() == this.weekEnd) {
 					html.push('</tr>');
@@ -717,6 +765,9 @@
 					clsName += ' disabled';
 				} else if (hours == i) {
 					clsName += ' active';
+				}
+				if(this.isReserved(actual, 3)) {
+					clsName += ' reserved';
 				}
 				if (this.showMeridian && dates[this.language].meridiem.length == 2) {
 					meridian = (i < 12 ? dates[this.language].meridiem[0] : dates[this.language].meridiem[1]);
@@ -744,10 +795,13 @@
 			for (var i = 0; i < 60; i += this.minuteStep) {
 				var actual = UTCDate(year, month, dayMonth, hours, i, 0);
 				clsName = '';
-				if (actual.valueOf() < this.startDate || actual.valueOf() > this.endDate || isDisabled(actual, 4)) {
+				if (actual.valueOf() < this.startDate || actual.valueOf() > this.endDate || this.isDisabled(actual, 4)) {
 					clsName += ' disabled';
 				} else if (Math.floor(minutes / this.minuteStep) == Math.floor(i / this.minuteStep)) {
 					clsName += ' active';
+				}
+				if(this.isReserved(actual, 4)) {
+					clsName += ' reserved';
 				}
 				if (this.showMeridian && dates[this.language].meridiem.length == 2) {
 					meridian = (hours < 12 ? dates[this.language].meridiem[0] : dates[this.language].meridiem[1]);
@@ -790,8 +844,9 @@
 			if (year == endYear) {
 				months.slice(endMonth + 1).addClass('disabled');
 			}
-			for(var k = 0; k < 12; k++) {
-				if(isDisabled(new UTCDate(year, k), 1)) months[i].addClass('disabled');
+			for(var k = 0; k < months.length; k++) {
+				if(this.isDisabled(new UTCDate(year, k), 1)) $(months[k]).addClass('disabled');
+				if(this.isReserved(new UTCDate(year, k), 1)) $(months[k]).addClass('reserved');
 			}
 
 			html = '';
@@ -803,7 +858,11 @@
 				.find('td');
 			year -= 1;
 			for (var i = -1; i < 11; i++) {
-				html += '<span class="year' + (i == -1 || i == 10 ? ' old' : '') + (currentYear == year ? ' active' : '') + (year < startYear || year > endYear || isDisabled (new UTCDate(year), 0) ? ' disabled' : '') + '">' + year + '</span>';
+				html += '<span class="year' + (i == -1 || i == 10 ? ' old' : '') 
+				+ (currentYear == year ? ' active' : '') 
+				+ (year < startYear || year > endYear || this.isDisabled(new UTCDate(year, 0), 0) ? ' disabled' : '') 
+				+ (this.isReserved(new UTCDate(year, 0), 0) ? ' reserved' : '')
+				+ '">' + year + '</span>';
 				year += 1;
 			}
 
@@ -1382,7 +1441,8 @@
 			monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
 			meridiem:    ["am", "pm"],
 			suffix:      ["st", "nd", "rd", "th"],
-			today:       "Today"
+			today:       "Today",
+			holidays:    [{month: 1, days: [1,13,27]}, {month: 2, days: [3, 14, 12]}]
 		}
 	};
 
@@ -1824,4 +1884,4 @@
 		$('[data-provide="datetimepicker-inline"]').datetimepicker();
 	});
 
-}(window.jQuery);
+})(window.jQuery);

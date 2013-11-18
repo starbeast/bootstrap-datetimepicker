@@ -3,7 +3,7 @@
 <head>
     <title></title>
     <link href="./bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
-    <link href="../css/bootstrap-datetimepicker.min.css" rel="stylesheet" media="screen">
+    <link href="../css/bootstrap-datetimepicker.css" rel="stylesheet" media="screen">
 </head>
 
 <body>
@@ -47,6 +47,67 @@
 <script type="text/javascript" src="../js/bootstrap-datetimepicker.js" charset="UTF-8"></script>
 <script type="text/javascript" src="../js/locales/bootstrap-datetimepicker.fr.js" charset="UTF-8"></script>
 <script type="text/javascript">
+var years = [{
+    year: 2013,
+    monthes: [{
+        month: 10,
+        days: [{
+            day: 19,
+            hours: [{
+                hour: 14,
+                intervals: [{
+                    interval: 1,
+                    reserved: false
+                }, {
+                    interval: 2,
+                    reserved: true
+                }, {
+                    interval: 3,
+                    reserved: false
+                }]
+            }, {
+                hour: 15,
+                intervals: [{
+                    interval: 4,
+                    reserved: false
+                }, {
+                    interval: 1,
+                    reserved: true
+                }, {
+                    interval: 3,
+                    reserved: false
+                }]
+            }]
+        }, {
+            day: 20,
+            hours: [{
+                hour: 9,
+                intervals: [{
+                    interval: 4,
+                    reserved: false
+                }, {
+                    interval: 2,
+                    reserved: true
+                }, {
+                    interval: 3,
+                    reserved: false
+                }]
+            }, {
+                hour: 10,
+                intervals: [{
+                    interval: 4,
+                    reserved: false
+                }, {
+                    interval: 0,
+                    reserved: true
+                }, {
+                    interval: 3,
+                    reserved: false
+                }]
+            }]
+        }]
+    }]
+}];
     $('.form_datetime').datetimepicker({
         //language:  'fr',
         weekStart: 1,
@@ -55,9 +116,13 @@
 		todayHighlight: 1,
 		startView: 2,
 		forceParse: 0,
-        showMeridian: 1
+        showMeridian: 1,
+        yearsSchedule: years,
+        emptyMeansEnabled: false,
+        holidaysAreDisabled: true,
+        disableWeekends: true
     });
-	$('.form_date').datetimepicker({
+	/*$('.form_date').datetimepicker({
         language:  'fr',
         weekStart: 1,
         todayBtn:  1,
@@ -65,7 +130,10 @@
 		todayHighlight: 1,
 		startView: 2,
 		minView: 2,
-		forceParse: 0
+		forceParse: 0,
+        emptyMeansEnabled: true,
+        holidaysAreDisabled: true,
+        disableWeekends: true
     });
 	$('.form_time').datetimepicker({
         language:  'fr',
@@ -76,8 +144,11 @@
 		startView: 1,
 		minView: 0,
 		maxView: 1,
-		forceParse: 0
-    });
+		forceParse: 0,
+        emptyMeansEnabled: true,
+        holidaysAreDisabled: true,
+        disableWeekends: true
+    });*/
 </script>
 
 </body>
