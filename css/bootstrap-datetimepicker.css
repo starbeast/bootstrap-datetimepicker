@@ -311,19 +311,23 @@
   color: #999999;
   cursor: default;
 }
+.datetimepicker table tr td span.disabled.holiday,
+.datetimepicker table tr td span.disabled.holiday:hover,
+.datetimepicker table tr td.disabled.holiday,
+.datetimepicker table tr td.disabled.holiday:hover {
+  background: #eeeeee;
+  color: red;
+  cursor: default;
+}
 /*------------------------------------*/
 
 .datetimepicker table tr td span.holiday,
 .datetimepicker table tr td span.holiday:hover,
-.datetimepicker table tr td span.disabled.holiday,
-.datetimepicker table tr td span.disabled.holiday:hover,
 .datetimepicker table tr td.holiday,
-.datetimepicker table tr td.holiday:hover,
-.datetimepicker table tr td.disabled.holiday,
-.datetimepicker table tr td.disabled.holiday:hover {
+.datetimepicker table tr td.holiday:hover {
   background: none;
   color: red;
-  cursor: default;
+  cursor: pointer;
 }
 .datetimepicker table tr td span.reserved,
 .datetimepicker table tr td span.reserved:hover,
@@ -332,7 +336,11 @@
 .datetimepicker table tr td span.disabled.reserved,
 .datetimepicker table tr td span.disabled.reserved:hover,
 .datetimepicker table tr td.disabled.reserved,
-.datetimepicker table tr td.disabled.reserved:hover {
+.datetimepicker table tr td.disabled.reserved:hover,
+.datetimepicker table tr td span.holiday.reserved,
+.datetimepicker table tr td span.holiday.reserved:hover,
+.datetimepicker table tr td.holiday.reserved,
+.datetimepicker table tr td.holiday.reserved:hover {
   background: none;
   color: orange;
   cursor: default;

@@ -41,7 +41,7 @@
 		return UTCDate(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), today.getUTCHours(), today.getUTCMinutes(), today.getUTCSeconds(), 0);
 	}
 //magic code goes here
-	var registerFilterMonad = (function (){
+	/*var registerFilterMonad = (function (){
 
 		var oldMonad = Object.prototype.filterMonad;
 		var monad = oldMonad;
@@ -59,6 +59,7 @@
 		return function() {
 
 			if(arguments && arguments[0]) {
+				console.log("registering");
 				Object.prototype.filterMonad = function(param, filter, returnValue) {
 					if (!$.isArray(this)) return [];
 					var result = $.grep(this, function (elem, ind) {
@@ -80,16 +81,17 @@
 					enumerable: false,
 					configurable : true,
 					get: function() {
-						return monad;
+						return pushing;
 					},
 					set: function(value) {
-						monad = value;
+						pushing = value;
 					}
 				});
 
 		return function() {
 
 			if(arguments && arguments[0]) {
+				console.log("registering");
 				Object.prototype.arrayPushing = function(param, filter, pushValue, returnValue) {
 					if (!$.isArray(this)) return [];
 					var ind;
@@ -102,14 +104,14 @@
 						return this[ind][returnValue];
 					} else {
 						this.push(pushValue);
-						pushValue[returnValue];
+						return pushValue[returnValue];
 					}
 				};
 			} else {
 				Object.prototype.arrayPushing = oldPushing;
 			}
 		};
-	})();
+	})();*/
 //end of magic
 	var Datetimepicker = function (element, options) {
 		var that = this;
@@ -143,14 +145,17 @@
 		//---------------------------------------------------------------
 
 		//array for all years we have cached
-		this.intervalsAreIndexes = options.intervalsAreIndexes || true;
-		this.years = this.rebuildDatesAccordingToTimezoneOffset(options.yearsSchedule) || [];
+		this.intervalsAreIndexes = options.intervalsAreIndexes || true;		
 		this.holidaysAreDisabled = options.holidaysAreDisabled || false;
+		this.disableTooltips = options.disableTooltips || false;
+		this.isInitialDateUTC = options.isDateUTC || true;		
+		this.isArrayOfYearsTemplateType = options.isArrayOfYearsTemplateType || true;
 
 		//inversion of dates being enabled
 		this.emptyMeansEnabled = options.emptyMeansEnabled || false;		
 		this.serverPath = options.serverPath || this.element.data('server-path') || "";
 		this.disableWeekends = options.disableWeekends || false;
+		this.years = this.rebuildDatesAccordingToTimezoneOffset(options.yearsSchedule) || [];
 
 		//---------------------------------------------------------------
 
@@ -597,46 +602,78 @@
 			var dateHour = date.getUTCHours();
 			var dateMinute = date.getUTCMinutes();
 			var isDisabled;
+			var counter, checkArray;
+			checkArray = this.years;			
 
 			switch(depth) {
 
-			case 0: isDisabled = this.years.filterMonad("year", dateYear, "year").length ? false : true;
-					if(isDisabled) return this.emptyMeansEnabled ? false : true;
-					return this.emptyMeansEnabled ? true : false;
+			case 0: isDisabled = true;
+				var year;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					year = checkArray[counter].date.getFullYear();
+					if(year == dateYear) {
+						return this.emptyMeansEnabled ? true : false;
+					}
+				}
+				return this.emptyMeansEnabled ? false : true;
 
-			case 1: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
-						.filterMonad("month", dateMonth, "month").length ? false : true;
-					if(isDisabled) return this.emptyMeansEnabled ? false : true;
-					return this.emptyMeansEnabled ? true : false;
+			case 1: isDisabled = true;
+				if(this.isDisabled(date, depth - 1)) return true;
+				var year, month;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					year = checkArray[counter].date.getFullYear();
+					month = checkArray[counter].date.getMonth();
+					if(year == dateYear && month == dateMonth) {
+						return this.emptyMeansEnabled ? true : false;
+					}
+				}
+				return this.emptyMeansEnabled ? false : true;
 
-			case 2: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
-						.filterMonad("month", dateMonth, "days")
-						.filterMonad("day", dateDay, "day").length ? false : true;
-					if(this.holidaysAreDisabled && this.isHolidayDay(date)) return true;
-					if(isDisabled || (this.holidaysAreDisabled && this.isHolidayDay(date))) return this.emptyMeansEnabled ? false : true;
-					return this.emptyMeansEnabled ? true : false;
-					
-			case 3: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
-						.filterMonad("month", dateMonth, "days")
-						.filterMonad("day", dateDay, "hours")
-						.filterMonad("hour", dateHour, "hour").length ? false : true;
-					if(isDisabled) return this.emptyMeansEnabled ? false : true;
-					return this.emptyMeansEnabled ? true : false;
+			case 2: isDisabled = true;
+				if(this.isDisabled(date, depth - 1)) return true;
+				var year, month, day;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					year = checkArray[counter].date.getFullYear();					
+					month = checkArray[counter].date.getMonth();
+					day = checkArray[counter].date.getDate();
+					if(year == dateYear && month == dateMonth && day == dateDay) {
+						return this.emptyMeansEnabled ? true : false;
+					}
+				}
+				return this.emptyMeansEnabled ? false : true;
 
-			case 4: isDisabled = this.years.filterMonad("year", dateYear, "monthes")
-						.filterMonad("month", dateMonth, "days")
-						.filterMonad("day", dateDay, "hours")
-						.filterMonad("hour", dateHour, "intervals")
-						.filterMonad("interval", this.intervalsAreIndexes ?
-							dateMinute / this.minuteStep
-							: dateMinute, "interval").length ? false : true;
-					if(isDisabled) return this.emptyMeansEnabled ? false : true;
-					return this.emptyMeansEnabled ? true : false;
+			case 3: isDisabled = true;
+				if(this.isDisabled(date, depth - 1)) return true;
+				var year, month, day, hour;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					year = checkArray[counter].date.getFullYear();
+					month = checkArray[counter].date.getMonth();
+					day = checkArray[counter].date.getDate();
+					hour = checkArray[counter].date.getHours();
+					if(year == dateYear && month == dateMonth && day == dateDay && hour == dateHour) {
+						return this.emptyMeansEnabled ? true : false;
+					}
+				}
+				return this.emptyMeansEnabled ? false : true;
+
+			case 4: isDisabled = true;
+				if(this.isDisabled(date, depth - 1)) return true;
+				var year, month, day, hour, interval;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					year = checkArray[counter].date.getFullYear();
+					month = checkArray[counter].date.getMonth();
+					day = checkArray[counter].date.getDate();
+					hour = checkArray[counter].date.getHours();
+					interval = checkArray[counter].date.getMinutes();
+					if(year == dateYear && month == dateMonth && day == dateDay && hour == dateHour && interval == dateMinute) {
+						return this.emptyMeansEnabled ? true : false;
+					}
+				}
+				return this.emptyMeansEnabled ? false : true;
 			}
 		},
 
-		isReserved: function(date, depth) {
-			//return false;
+		isReserved: function(date, depth, array, strict, initial) {
 			//date = new Date(date.valueOf() - date.getTimezoneOffset() * 60 * 1000);
 			var dateYear = date.getUTCFullYear();
 			var dateMonth = date.getUTCMonth();
@@ -644,10 +681,93 @@
 			var dateHour = date.getUTCHours();
 			var dateMinute = date.getUTCMinutes();
 			var isReserved;
-
+			var counter, checkArray;
+			checkArray = array ? array : this.years;
+			var newArray = [];
+			var isStrict = strict === undefined ? true : strict;
+			var initialDepth = initial === undefined ? depth : initial;
 			switch(depth) {
 
-			case 0: isReserved = this.years.filterMonad("year", dateYear, "reserved")[0];
+			case 0: isReserved = true;
+				var year;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					year = checkArray[counter].date.getFullYear();
+					if(year == dateYear) {
+						newArray.push(checkArray[counter]);
+					}
+				}
+				isReserved = this.isReserved(date, depth + 1, newArray, false, initialDepth);
+				return isReserved;
+
+			case 1: isReserved = true;
+				var year, month;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					if(!isStrict) {
+						newArray = checkArray;
+						break;
+					}
+					year = checkArray[counter].date.getFullYear();
+					month = checkArray[counter].date.getMonth();
+					if(year == dateYear && month == dateMonth) {
+						newArray.push(checkArray[counter]);
+					}
+				}
+				isReserved = this.isReserved(date, depth + 1, newArray, false, initialDepth);
+				return isReserved;
+			
+			case 2: isReserved = true;
+				var year, month, day;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					if(!isStrict) {
+						newArray = checkArray;
+						break;
+					}
+					year = checkArray[counter].date.getFullYear();
+					month = checkArray[counter].date.getMonth();
+					day = checkArray[counter].date.getDate();
+					if(year == dateYear && month == dateMonth && day == dateDay) {
+						newArray.push(checkArray[counter]);
+					}
+				}
+				isReserved = this.isReserved(date, depth + 1, newArray, false, initialDepth);
+				return isReserved;
+
+			case 3: isReserved = true;
+				var year, month, day, hour;
+				for(counter = 0; counter < checkArray.length; counter++) {
+					if(!isStrict) {
+						newArray = checkArray;
+						break;
+					}
+					year = checkArray[counter].date.getFullYear();
+					month = checkArray[counter].date.getMonth();
+					day = checkArray[counter].date.getDate();
+					hour = checkArray[counter].date.getHours();
+					if(year == dateYear && month == dateMonth && day == dateDay && hour == dateHour) {
+						newArray.push(checkArray[counter]);
+					}
+				}
+				isReserved = this.isReserved(date, depth + 1, newArray, false, initialDepth);
+				return isReserved;
+
+			case 4: isReserved = true;
+				var year, month, day, hour, interval, count = 0;
+				for(counter = 0; counter < checkArray.length; counter++) {					
+					year = checkArray[counter].date.getFullYear();
+					month = checkArray[counter].date.getMonth();
+					day = checkArray[counter].date.getDate();
+					hour = checkArray[counter].date.getHours();
+					interval = checkArray[counter].date.getMinutes();
+					if(year == dateYear && month == (initial < 1 ? month : dateMonth) && day == (initial < 2 ? day : dateDay) && hour == (initial < 3 ? hour : dateHour) && interval == (initial < 4 ? interval : dateMinute)) {
+						count++;
+						if(!checkArray[counter].reserved) return false;
+					}
+				}
+				if(!count) return false;
+				return isReserved;
+			}
+
+			/*case 0: isReserved = this.years.filterMonad("year", dateYear, "reserved")[0];
 				if(isReserved) return true;
 				return false;
 
@@ -678,7 +798,8 @@
 							: dateMinute, "reserved")[0];
 				if(isReserved) return true;
 				return false;
-			}
+			}*/
+
 		},
 
 		isHolidayDay: function(date) {
@@ -699,7 +820,7 @@
 			/*firstDayDisabled = (timezoneOffset / 60 <= 12) ? 5 : (timezoneOffset / 60 >= 12) ? 0 : 6;
 			secondDayDisabled = (timezoneOffset / 60 <= 12) ? 6 : (timezoneOffset / 60 >= 12) ? 1 : 0;*/
 
-			if(isHoliday /*|| (this.disableWeekends && (dateDayInWeek === firstDayDisabled || dateDayInWeek === secondDayDisabled))*/) {
+			if(isHoliday || (this.disableWeekends && (dateDayInWeek === 0 || dateDayInWeek === 6))) {
 				return true;
 			}
 			return false;
@@ -741,56 +862,42 @@
 			var monthes, days, hours, intervals;
 			var year, month, day, hour, interval;
 			var date, isReserved;
-			for(i = 0; i < years.length; i++) {
-				year = years[i].year;
-				monthes = years[i].monthes;
-				for(j = 0; j < monthes.length; j++) {
-					month = monthes[j].month;
-					days = monthes[j].days;
-					for(k = 0; k < days.length; k++) {
-						day = days[k].day;
-						hours = days[k].hours;
-						for(e = 0; e < hours.length; e++) {
-							hour = hours[e].hour;
-							intervals = hours[e].intervals;
-							for(d = 0; d < intervals.length; d++) {
-								interval = this.intervalsAreIndexes ? intervals[d].interval * this.minuteStep : intervals[d].interval;
-								interval -= new Date().getTimezoneOffset();
-								date = new Date(year, month, day, hour, interval, 0, 0);
-								isReserved = intervals[d].reserved;
-								dates.push({date: date, reserved: isReserved});
+			if(this.isArrayOfYearsTemplateType) {
+				for(i = 0; i < years.length; i++) {
+					year = years[i].year;
+					monthes = years[i].monthes;
+					for(j = 0; j < monthes.length; j++) {
+						month = monthes[j].month;
+						days = monthes[j].days;
+						for(k = 0; k < days.length; k++) {
+							day = days[k].day;
+							hours = days[k].hours;
+							for(e = 0; e < hours.length; e++) {
+								hour = hours[e].hour;
+								intervals = hours[e].intervals;
+								for(d = 0; d < intervals.length; d++) {
+									interval = this.intervalsAreIndexes ? intervals[d].interval * this.minuteStep : intervals[d].interval;
+									if(this.isInitialDateUTC) {
+										interval -= new Date().getTimezoneOffset();
+									}
+									date = new Date(year, month, day, hour, interval, 0, 0);
+									isReserved = intervals[d].reserved;
+									dates.push({date: date, reserved: isReserved});
+								}
 							}
 						}
 					}
 				}
+			} else {
+				for(i = 0; i < years.length; i++) {
+					date = years[i].date;
+					if(this.isInitialDateUTC) {
+						date = date.setMinutes((date.getMinutes() - date.getTimezoneOffset()));
+					}
+					dates.push({date: date, reserved: years[i].reserved});
+				}
 			}
-
-			var yearsToReturn = this.buildNewYearsObjectFromDates(dates);
-			return yearsToReturn;
-		},
-
-		buildNewYearsObjectFromDates: function(dates) {
-			var years = [];
-			var date;
-			var currentDate = {
-				year: undefined,
-				reserved: true,
-				month: undefined,
-				day: undefined,
-				hour: undefined
-			};
-			var i = 0;
-			var year, month, day, hour, interval;
-			for(; i < dates.length; i++) {
-				date = dates[i].date;
-				year = date.getFullYear();
-				month = date.getMonth();
-				day = date.getDate();
-				hour = date.getHours();
-				interval = this.intervalsAreIndexes ? date.getMinutes() / this.minuteStep : date.getMinutes();
-				years[getIndexWithPushing()]
-			}
-			return years;
+			return dates;
 		},
 
 		fill: function () {
@@ -843,7 +950,7 @@
 			var html = [];
 			var clsName;
 
-			registerFilterMonad(true);
+			//registerFilterMonad(true);
 			
 			while (prevMonth.valueOf() < nextMonth) {
 				if (prevMonth.getUTCDay() == this.weekStart) {
@@ -897,6 +1004,9 @@
 				if(this.isReserved(actual, 3)) {
 					clsName += ' reserved';
 				}
+				if(this.isHolidayDay(actual)) {
+					clsName += ' holiday';
+				}
 				if (this.showMeridian && dates[this.language].meridiem.length == 2) {
 					meridian = (i < 12 ? dates[this.language].meridiem[0] : dates[this.language].meridiem[1]);
 					if (meridian != meridianOld) {
@@ -930,6 +1040,9 @@
 				}
 				if(this.isReserved(actual, 4)) {
 					clsName += ' reserved';
+				}
+				if(this.isHolidayDay(actual)) {
+					clsName += ' holiday';
 				}
 				if (this.showMeridian && dates[this.language].meridiem.length == 2) {
 					meridian = (hours < 12 ? dates[this.language].meridiem[0] : dates[this.language].meridiem[1]);
@@ -996,9 +1109,16 @@
 
 			if(this.isDisabled(new Date(), 2)) $('tfoot .today').addClass('disabled');
 
-			registerFilterMonad(false);
-
+			//registerFilterMonad(false);
 			yearCont.html(html);
+			if(!this.disableTooltips) {
+				$('.disabled').tooltip({ title: "disabled", container: this.picker});
+				$('.reserved').tooltip({title: "reserved", container: this.picker});
+				$('.holiday').tooltip({title: "holiday", container: this.picker});
+				$('.day.today').tooltip({title: "today", container: this.picker});
+				$('.active').tooltip({title: "active", container: this.picker});
+			}
+
 			this.place();
 		},
 
@@ -1147,13 +1267,13 @@
 							case 'today':
 								var date = new Date();
 								date = UTCDate(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), 0);
-								registerFilterMonad(true);
+								//registerFilterMonad(true);
 								if(this.isDisabled(date, 2) || this.isReserved(date, 2)) break;
 								// Respect startDate and endDate.
 								if (date < this.startDate) date = this.startDate;
 								else if (date > this.endDate) date = this.endDate;
 								date = this.todayClosestDate(date);
-								registerFilterMonad(false);
+								//registerFilterMonad(false);
 								if(!date) break;
 								this.viewMode = this.startViewMode;
 								this.showMode(0);
@@ -1166,7 +1286,7 @@
 						}
 						break;
 					case 'span':
-						if (!target.is('.disabled') && !target.is('.reserved')) {
+						if (!target.is('.disabled') /*&& !target.is('.reserved')*/) {
 							var year = this.viewDate.getUTCFullYear(),
 								month = this.viewDate.getUTCMonth(),
 								day = this.viewDate.getUTCDate(),
@@ -1241,7 +1361,7 @@
 						}
 						break;
 					case 'td':
-						if (target.is('.day') && !target.is('.disabled')) {
+						if (target.is('.day') && !target.is('.disabled') && !target.is('.reserved')) {
 							var day = parseInt(target.text(), 10) || 1;
 							var year = this.viewDate.getUTCFullYear(),
 								month = this.viewDate.getUTCMonth(),
