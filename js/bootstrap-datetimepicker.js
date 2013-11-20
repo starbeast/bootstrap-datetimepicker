@@ -150,6 +150,7 @@
 		this.disableTooltips = options.disableTooltips || false;
 		this.isInitialDateUTC = options.isDateUTC || true;		
 		this.isArrayOfYearsTemplateType = options.isArrayOfYearsTemplateType || true;
+		this.reservedIsDisabled = options.reservedIsDisabled || false;
 
 		//inversion of dates being enabled
 		this.emptyMeansEnabled = options.emptyMeansEnabled || false;		
@@ -949,10 +950,12 @@
 			nextMonth = nextMonth.valueOf();
 			var html = [];
 			var clsName;
+			var reservationFlag;
 
 			//registerFilterMonad(true);
 			
 			while (prevMonth.valueOf() < nextMonth) {
+				reservationFlag = false;
 				if (prevMonth.getUTCDay() == this.weekStart) {
 					html.push('<tr>');
 				}
@@ -972,16 +975,19 @@
 				if (prevMonth.valueOf() == currentDate) {
 					clsName += ' active';
 				}
-				if ((prevMonth.valueOf() + 86400000) <= this.startDate || prevMonth.valueOf() > this.endDate ||
-					$.inArray(prevMonth.getUTCDay(), this.daysOfWeekDisabled) !== -1 || this.isDisabled(prevMonth, 2)) {
-					clsName += ' disabled';
+				if(this.isReserved(prevMonth, 2)) {
+					clsName += ' reserved';
+					reservationFlag = !this.reservedIsDisabled;
+				}
+				if(!reservationFlag) {
+					if ((prevMonth.valueOf() + 86400000) <= this.startDate || prevMonth.valueOf() > this.endDate ||
+						$.inArray(prevMonth.getUTCDay(), this.daysOfWeekDisabled) !== -1 || this.isDisabled(prevMonth, 2)) {
+						clsName += ' disabled';
+					}
 				}
 				if(this.isHolidayDay(prevMonth)) {
 					clsName += ' holiday';
-				}
-				if(this.isReserved(prevMonth, 2)) {
-					clsName += ' reserved';
-				}
+				}				
 				html.push('<td class="day' + clsName + '">' + prevMonth.getUTCDate() + '</td>');
 				if (prevMonth.getUTCDay() == this.weekEnd) {
 					html.push('</tr>');
@@ -993,20 +999,24 @@
 			html = [];
 			var txt = '', meridian = '', meridianOld = '';
 			for (var i = 0; i < 24; i++) {
+				reservationFlag = false;
 				var actual = UTCDate(year, month, dayMonth, i);
 				clsName = '';
 				// We want the previous hour for the startDate
-				if ((actual.valueOf() + 3600000) <= this.startDate || actual.valueOf() > this.endDate || this.isDisabled(actual, 3)) {
-					clsName += ' disabled';
-				} else if (hours == i) {
-					clsName += ' active';
-				}
 				if(this.isReserved(actual, 3)) {
 					clsName += ' reserved';
+					reservationFlag = !this.reservedIsDisabled;
 				}
-				if(this.isHolidayDay(actual)) {
+				if(!reservationFlag) {
+					if ((actual.valueOf() + 3600000) <= this.startDate || actual.valueOf() > this.endDate || this.isDisabled(actual, 3)) {
+						clsName += ' disabled';
+					} else if (hours == i) {
+						clsName += ' active';
+					}
+				}				
+				/*if(this.isHolidayDay(actual)) {
 					clsName += ' holiday';
-				}
+				}*/
 				if (this.showMeridian && dates[this.language].meridiem.length == 2) {
 					meridian = (i < 12 ? dates[this.language].meridiem[0] : dates[this.language].meridiem[1]);
 					if (meridian != meridianOld) {
@@ -1031,19 +1041,23 @@
 			html = [];
 			txt = '', meridian = '', meridianOld = '';
 			for (var i = 0; i < 60; i += this.minuteStep) {
+				reservationFlag = false;
 				var actual = UTCDate(year, month, dayMonth, hours, i, 0);
 				clsName = '';
-				if (actual.valueOf() < this.startDate || actual.valueOf() > this.endDate || this.isDisabled(actual, 4)) {
-					clsName += ' disabled';
-				} else if (Math.floor(minutes / this.minuteStep) == Math.floor(i / this.minuteStep)) {
-					clsName += ' active';
-				}
 				if(this.isReserved(actual, 4)) {
 					clsName += ' reserved';
+					reservationFlag = !this.reservedIsDisabled;
 				}
-				if(this.isHolidayDay(actual)) {
+				if(!reservationFlag) {
+					if (actual.valueOf() < this.startDate || actual.valueOf() > this.endDate || this.isDisabled(actual, 4)) {
+						clsName += ' disabled';
+					} else if (Math.floor(minutes / this.minuteStep) == Math.floor(i / this.minuteStep)) {
+						clsName += ' active';
+					}
+				}				
+				/*if(this.isHolidayDay(actual)) {
 					clsName += ' holiday';
-				}
+				}*/
 				if (this.showMeridian && dates[this.language].meridiem.length == 2) {
 					meridian = (hours < 12 ? dates[this.language].meridiem[0] : dates[this.language].meridiem[1]);
 					if (meridian != meridianOld) {
@@ -1086,8 +1100,10 @@
 				months.slice(endMonth + 1).addClass('disabled');
 			}
 			for(var k = 0; k < months.length; k++) {
-				if(this.isDisabled(new UTCDate(year, k), 1)) $(months[k]).addClass('disabled');
 				if(this.isReserved(new UTCDate(year, k), 1)) $(months[k]).addClass('reserved');
+				if(!($(months[k]).is('.reserved') && !this.reservedIsDisabled)) {
+					if(this.isDisabled(new UTCDate(year, k), 1)) $(months[k]).addClass('disabled');
+				}				
 			}
 
 			html = '';
@@ -1099,24 +1115,33 @@
 				.find('td');
 			year -= 1;
 			for (var i = -1; i < 11; i++) {
+				reservationFlag = this.isReserved(new UTCDate(year, 0), 0) && !this.reservedIsDisabled;
 				html += '<span class="year' + (i == -1 || i == 10 ? ' old' : '') 
 				+ (currentYear == year ? ' active' : '') 
-				+ (year < startYear || year > endYear || this.isDisabled(new UTCDate(year, 0), 0) ? ' disabled' : '') 
-				+ (this.isReserved(new UTCDate(year, 0), 0) ? ' reserved' : '')
+				+ (year < startYear || year > endYear || (this.isDisabled(new UTCDate(year, 0), 0) && !reservationFlag) ? ' disabled' : '') 
+				+ (reservationFlag && !this.reservedIsDisabled ? ' reserved' : '')
 				+ '">' + year + '</span>';
 				year += 1;
 			}
 
 			if(this.isDisabled(new Date(), 2)) $('tfoot .today').addClass('disabled');
+			if(this.isReserved(new Date(), 2)) $('tfoot .today').addClass('reserved');
 
 			//registerFilterMonad(false);
 			yearCont.html(html);
 			if(!this.disableTooltips) {
-				$('.disabled').tooltip({ title: "disabled", container: this.picker});
-				$('.reserved').tooltip({title: "reserved", container: this.picker});
-				$('.holiday').tooltip({title: "holiday", container: this.picker});
+				$('tbody .disabled.holiday.today').tooltip({ title: "disabled holiday today", container: this.picker});
+				$('tbody .reserved.holiday.today').tooltip({ title: "reserved holiday today", container: this.picker});
+				$('.disabled.holiday.day').tooltip({ title: "disabled holiday", container: this.picker});
+				$('.reserved.holiday.day').tooltip({ title: "reserved holiday", container: this.picker});
+				$('tbody .disabled.today').tooltip({ title: "disabled today", container: this.picker});
+				$('tbody .reserved.today').tooltip({ title: "reserved today", container: this.picker});
+				$('tbody .holiday.today').tooltip({ title: "holiday today", container: this.picker});
+				$('tbody .disabled').tooltip({title: "disabled", container: this.picker});
+				$('tbody .reserved').tooltip({title: "reserved", container: this.picker});
+				$('.day.holiday').tooltip({title: "holiday", container: this.picker});
 				$('.day.today').tooltip({title: "today", container: this.picker});
-				$('.active').tooltip({title: "active", container: this.picker});
+				$('.active').tooltip({title: "active", container: this.picker});				
 			}
 
 			this.place();
@@ -1228,8 +1253,9 @@
 			e.stopPropagation();
 			e.preventDefault();
 			var target = $(e.target).closest('span, td, th, legend');
+			//here it is, reserved minutes won't appear in the form by default
 			if (target.length == 1) {
-				if (target.is('.disabled')) {
+				if (target.is('.disabled') || target.is('.reserved.minute')) {
 					this.element.trigger({
 						type:      'outOfRange',
 						date:      this.viewDate,
@@ -1286,7 +1312,7 @@
 						}
 						break;
 					case 'span':
-						if (!target.is('.disabled') /*&& !target.is('.reserved')*/) {
+						if (!target.is('.disabled')) {
 							var year = this.viewDate.getUTCFullYear(),
 								month = this.viewDate.getUTCMonth(),
 								day = this.viewDate.getUTCDate(),
@@ -1361,7 +1387,7 @@
 						}
 						break;
 					case 'td':
-						if (target.is('.day') && !target.is('.disabled') && !target.is('.reserved')) {
+						if (target.is('.day') && !target.is('.disabled')) {
 							var day = parseInt(target.text(), 10) || 1;
 							var year = this.viewDate.getUTCFullYear(),
 								month = this.viewDate.getUTCMonth(),
@@ -1395,10 +1421,11 @@
 						}
 						var oldViewMode = this.viewMode;
 						this.showMode(-1);
+						//this.showMode(false);
 						this.fill();
 						if (oldViewMode == this.viewMode && this.autoclose) {
 							this.hide();
-						}
+						}					
 						break;
 				}
 			}
