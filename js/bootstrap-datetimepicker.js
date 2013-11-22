@@ -901,10 +901,25 @@
 			return dates;
 		},
 
+		checkValues: function() {
+			if(this.emptyMeansEnabled) return;
+			var array = [];
+			var ind = 0;
+			var value;
+			for(;ind < this.years.length; ind++) {
+				value = this.years[ind].date.valueOf();
+				if(this.startDate.valueOf() < value && this.endDate.valueOf() > value) {
+					array.push(this.years[ind]);
+				}
+			}
+			this.years = array;
+		},
+
 		fill: function () {
 			if (this.date == null || this.viewDate == null) {
 				return;
 			}
+			this.checkValues();
 			var d = new Date(this.viewDate),
 				year = d.getUTCFullYear(),
 				month = d.getUTCMonth(),
